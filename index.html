@@ -1,0 +1,240 @@
+<!-- Adventure Capitalist X | Managers, Angels, Save System -->
+// Κατά την έξοδο από τη σελίδα, αποθηκεύουμε τον χρόνο
+window.addEventListener('beforeunload', () => {
+  localStorage.setItem('capitalistLastSave', Date.now());
+  saveGame();
+});
+
+// Κατά τη φόρτωση, υπολογίζουμε τα offline κέρδη
+function loadOfflineProfits() {
+  const lastSave = localStorage.getItem('capitalistLastSave');
+  if (!lastSave) return;
+
+  const now = Date.now();
+  const diffSeconds = Math.floor((now - lastSave) / 1000);
+
+  for (let key in planets) {
+    const p = planets[key];
+    // Υπολογίζουμε offline κέρδη: idleIncome * sec * multiplier (αν έχει manager)
+    const hasManager = p.managers[0]?.hired ? 1 : 0;
+    const offlineEarnings = p.idleIncome * diffSeconds * hasManager;
+    p.money += offlineEarnings;
+  }
+
+  alert(`Offline earnings added for ${diffSeconds} seconds!`);
+  updateDisplay();
+  saveGame();
+}
+
+loadOfflineProfits();
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adventure Capitalist X - Expanded</title>
+<style>
+  body { font-family: sans-serif; background: #111; color: white; margin: 0; padding: 0; }
+  header { background: #222; padding: 20px; text-align: center; font-size: 28px; font-weight: bold; }
+  .planet-buttons { display: flex; justify-content: center; gap: 10px; padding: 10px; background: #333; }
+  button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; }
+  .active { background: gold; color: black; }
+  .container { padding: 20px; text-align: center; }
+  .money { font-size: 24px; margin: 20px 0; }
+  .upgrade, .manager, .angel { background: #444; margin: 10px auto; padding: 15px; border-radius: 10px; width: 90%; max-width: 500px; }
+  .upgrade button, .manager button, .angel button { margin-top: 10px; background: limegreen; }
+  .secret-code, .managers-section, .angels-section { margin-top: 20px; }
+</style>
+</head>
+<body>
+<header>💰 Adventure Capitalist X - Expanded</header>
+<div class="planet-buttons">
+  <button onclick="switchPlanet('earth')" class="active">🌍 Earth</button>
+  <button onclick="switchPlanet('saturn')">🪐 Saturn</button>
+  <button onclick="switchPlanet('sun')">☀️ Sun</button>
+</div>
+<div class="container">
+  <div class="money" id="moneyDisplay">$0</div>
+  <button onclick="earnMoney()">💼 Start Business</button>
+
+  <div class="secret-code">
+    <input type="text" id="secretInput" placeholder="Enter secret code">
+    <button onclick="checkSecretCode()">Unlock</button>
+  </div>
+
+  <div class="managers-section">
+    <h3>👔 Managers</h3>
+    <div id="managers"></div>
+  </div>
+
+  <div class="angels-section">
+    <h3>😇 Angels</h3>
+    <button onclick="prestige()">Reset & Gain Angels</button>
+    <div id="angelsDisplay">Angels: 0</div>
+  </div>
+
+  <div id="upgrades"></div>
+</div>
+<script>
+const planets = {
+  earth: { money: 0, multiplier: 1, upgrades: [], idleIncome: 0, managers: [], angels: 0 },
+  saturn: { money: 0, multiplier: 10, upgrades: [], idleIncome: 0, managers: [], angels: 0 },
+  sun: { money: 0, multiplier: 100, upgrades: [], idleIncome: 0, managers: [], angels: 0 }
+};
+
+const upgradeCounts = 100;
+function generateUpgrades(name, baseCost, baseProfit, scale, profitScale) {
+  let arr = [];
+  for (let i = 0; i < upgradeCounts; i++) {
+    arr.push({
+      name: `${name} Upgrade ${i + 1}`,
+      cost: baseCost * Math.pow(scale, i),
+      profit: Math.pow(profitScale, (i % 15) + 1)
+    });
+  }
+  return arr;
+}
+
+function generateManagers(baseCost) {
+  return [
+    { name: "Auto Manager", cost: baseCost * 100, hired: false }
+  ];
+}
+
+for (let p in planets) {
+  planets[p].upgrades = generateUpgrades(p, 10, 2, 1.5, 2);
+  planets[p].managers = generateManagers(10);
+}
+
+let currentPlanet = 'earth';
+
+function formatNumber(n) {
+  if (n < 1e6) return `$${n.toFixed(2)}`;
+  if (n >= 1e306) return `$1^${Math.floor(Math.log10(n))}`;
+  return `$${n.toExponential(2)}`;
+}
+
+function updateDisplay() {
+  const p = planets[currentPlanet];
+  document.getElementById('moneyDisplay').innerText = formatNumber(p.money);
+  document.getElementById('angelsDisplay').innerText = `Angels: ${Math.floor(p.angels)}`;
+
+  const upgradesDiv = document.getElementById('upgrades');
+  upgradesDiv.innerHTML = '';
+  p.upgrades.forEach((u, i) => {
+    upgradesDiv.innerHTML += `<div class='upgrade'>
+      <div>${u.name}</div><div>Cost: ${formatNumber(u.cost)} | Profit: $${u.profit}</div>
+      <button onclick='buyUpgrade(${i})'>Buy</button>
+    </div>`;
+  });
+
+  const managersDiv = document.getElementById('managers');
+  managersDiv.innerHTML = '';
+  p.managers.forEach((m, i) => {
+    managersDiv.innerHTML += `<div class='manager'>
+      <div>${m.name}</div><div>Cost: ${formatNumber(m.cost)}</div>
+      <button onclick='hireManager(${i})' ${m.hired ? 'disabled' : ''}>${m.hired ? 'Hired' : 'Hire'}</button>
+    </div>`;
+  });
+}
+
+function earnMoney() {
+  const p = planets[currentPlanet];
+  p.money += 1 * p.multiplier;
+  updateDisplay();
+  saveGame();
+}
+
+function buyUpgrade(i) {
+  const p = planets[currentPlanet];
+  const u = p.upgrades[i];
+  if (p.money >= u.cost) {
+    p.money -= u.cost;
+    p.multiplier += u.profit;
+    p.idleIncome += u.profit / 2;
+    u.cost *= 1.25;
+    updateDisplay();
+    saveGame();
+  }
+}
+
+function hireManager(i) {
+  const p = planets[currentPlanet];
+  const m = p.managers[i];
+  if (p.money >= m.cost && !m.hired) {
+    p.money -= m.cost;
+    m.hired = true;
+    updateDisplay();
+    saveGame();
+  }
+}
+
+function switchPlanet(name) {
+  document.querySelectorAll('.planet-buttons button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  currentPlanet = name;
+  updateDisplay();
+}
+
+function checkSecretCode() {
+  const code = document.getElementById('secretInput').value.trim();
+  if (code === 'jim123') {
+    const p = planets[currentPlanet];
+    p.money *= 2;
+    p.multiplier *= 2;
+    p.idleIncome *= 2;
+    alert("Secret unlocked! Boost x2 applied.");
+    updateDisplay();
+  } else {
+    alert("Invalid code.");
+  }
+}
+
+function prestige() {
+  const p = planets[currentPlanet];
+  const newAngels = Math.floor(p.money / 1e6);
+  if (newAngels > 0) {
+    p.angels += newAngels;
+    p.money = 0;
+    p.multiplier = 1 + p.angels * 0.05;
+    p.idleIncome = 0;
+    p.upgrades = generateUpgrades(currentPlanet, 10, 2, 1.5, 2);
+    p.managers = generateManagers(10);
+    alert(`You earned ${newAngels} Angels!`);
+    updateDisplay();
+    saveGame();
+  } else {
+    alert("Not enough money to prestige. Earn at least $1,000,000.");
+  }
+}
+
+function saveGame() {
+  localStorage.setItem('capitalistSave', JSON.stringify(planets));
+}
+
+function loadGame() {
+  const data = JSON.parse(localStorage.getItem('capitalistSave'));
+  if (data) {
+    for (let key in data) {
+      if (planets[key]) {
+        planets[key] = { ...planets[key], ...data[key] };
+      }
+    }
+  }
+}
+
+setInterval(() => {
+  for (let key in planets) {
+    const p = planets[key];
+    p.money += p.idleIncome * (p.managers[0]?.hired ? 1 : 0);
+  }
+  updateDisplay();
+  saveGame();
+}, 1000);
+
+loadGame();
+updateDisplay();
+</script>
+</body>
+</html>
